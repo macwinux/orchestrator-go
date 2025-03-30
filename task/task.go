@@ -1,8 +1,15 @@
 package task
 
 import (
+	"context"
+	"io"
+	"log"
+	"os"
 	"time"
 
+	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/image"
+	"github.com/docker/docker/client"
 	"github.com/docker/go-connections/nat"
 	"github.com/google/uuid"
 )
@@ -36,4 +43,52 @@ type TaskEvent struct {
 	State State
 	Timestamp time.Time
 	Task Task
+}
+
+// Config struct to hold docker container config
+type Config struct {
+	// Name of the task, also used as the container name
+	Name string
+	// AttachStdin boolean which determines if fstdin should be attached
+	AttachStdin bool
+	// AttachStdout boolean which determines if stdout should be attached
+	Attachstdout bool
+	// AttachStderr boolean which determines if stderr should be attached
+	AttachStderr bool
+	// ExposedPorts list of ports exposed
+	ExposedPorts nat.PortSet
+	// Cmd to be run inside container (optional)
+	Cmd []string
+	// image used to run the container
+	Image string
+	// Cpu
+	Memory int64
+	// Memory in MiB
+	Disk int64
+	// Env variables
+	Env []string
+	// RestartPolicy for the container ["", "always", "unless-stopped", "on failure"]
+	RestartPolicy string
+}
+
+type Docker struct {
+	Client *client.Client
+	Config Config
+}
+
+type DockerResult struct {
+	Error error
+	Action string
+	ContainerId string
+	Result string
+}
+
+func (d *Docker) Run() DockerResult {
+	ctx := context.Background()
+	reader, err := d.Client.ImagePull(ctx, d.Config.Image, image.PullOptions{})
+	if err != nil {
+		log.Printf("Error Pulling image %s: %v\n", d.Config.Image, err)
+		return DockerResult{Error: err}
+	}
+	io.Copy(os.Stdout, reader)
 }
