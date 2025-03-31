@@ -39,10 +39,10 @@ type Task struct {
 }
 
 type TaskEvent struct {
-	ID    uuid.UUID
-	State State
+	ID        uuid.UUID
+	State     State
 	Timestamp time.Time
-	Task Task
+	Task      Task
 }
 
 // Config struct to hold docker container config
@@ -68,7 +68,7 @@ type Config struct {
 	// Env variables
 	Env []string
 	// RestartPolicy for the container ["", "always", "unless-stopped", "on failure"]
-	RestartPolicy string
+	RestartPolicy container.RestartPolicyMode
 }
 
 type Docker struct {
@@ -77,10 +77,10 @@ type Docker struct {
 }
 
 type DockerResult struct {
-	Error error
-	Action string
+	Error       error
+	Action      string
 	ContainerId string
-	Result string
+	Result      string
 }
 
 func (d *Docker) Run() DockerResult {
@@ -91,4 +91,39 @@ func (d *Docker) Run() DockerResult {
 		return DockerResult{Error: err}
 	}
 	io.Copy(os.Stdout, reader)
+
+	rp := container.RestartPolicy{
+		Name: d.Config.RestartPolicy,
+	}
+
+	r := container.Resources{
+		Memory: d.Config.Memory,
+	}
+
+	cc := container.Config{
+		Image:        d.Config.Image,
+		Tty:          false,
+		Env:          d.Config.Env,
+		ExposedPorts: d.Config.ExposedPorts,
+	}
+
+	hc := container.HostConfig{
+		RestartPolicy:   rp,
+		Resources:       r,
+		PublishAllPorts: true,
+	}
+
+	resp, err := d.Client.ContainerCreate(ctx, &cc, &hc, nil, nil, d.Config.Name)
+	if err != nil {
+		log.Printf("Error creating container using image %s: %v\n", d.Config.Image, err)
+		return DockerResult{Error: err}
+	}
+
+	if err := d.Client.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil{
+		log.Printf("Error starting container %s: %v\n", resp.ID, err)
+		return DockerResult{Error: err}
+	}
+
+	
+
 }
