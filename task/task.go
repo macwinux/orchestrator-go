@@ -10,6 +10,7 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/client"
+	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/docker/go-connections/nat"
 	"github.com/google/uuid"
 )
@@ -83,8 +84,7 @@ type DockerResult struct {
 	Result      string
 }
 
-func (d *Docker) Run() DockerResult {
-	ctx := context.Background()
+func (d *Docker) Run(ctx context.Context) DockerResult {
 	reader, err := d.Client.ImagePull(ctx, d.Config.Image, image.PullOptions{})
 	if err != nil {
 		log.Printf("Error Pulling image %s: %v\n", d.Config.Image, err)
@@ -124,6 +124,34 @@ func (d *Docker) Run() DockerResult {
 		return DockerResult{Error: err}
 	}
 
-	
+	out, err := d.Client.ContainerLogs(ctx, resp.ID, container.LogsOptions{ShowStdout: true, ShowStderr: true})
+	if err != nil {
+		log.Printf("Error getting logs for container %s: %v\n", resp.ID, err)
+		return DockerResult{Error: err}
+	}
+	stdcopy.StdCopy(os.Stdout, os.Stderr, out)
 
+	return DockerResult{ContainerId: resp.ID, Action: "start", Result: "success"}
+}
+
+func (d *Docker) Stop(id string, ctx context.Context) DockerResult {
+	log.Printf("Attempting to stop container %v", id)
+	err := d.Client.ContainerStop(ctx, id, container.StopOptions{})
+	if err != nil {
+		log.Printf("Error stopping container %s: %v\n", id, err)
+		return DockerResult{Error: err}
+	}
+
+	err = d.Client.ContainerRemove(ctx, id, container.RemoveOptions{
+		RemoveVolumes: true,
+		RemoveLinks: false,
+		Force: false,
+	})
+
+	if err != nil {
+		log.Printf("Error removing container %s: %v\n", id, err)
+		return DockerResult{Error: err}
+	}
+
+	return DockerResult{Action: "stop", Result: "success", Error: nil}
 }
