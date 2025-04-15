@@ -25,6 +25,8 @@ func main() {
 	}
 	api := worker.Api{Address: host, Port: port, Worker: &w}
 	go runTasks(&w)
+	// Use in a docker image
+	//go w.CollectStats()
 	api.Start()
 }
 
